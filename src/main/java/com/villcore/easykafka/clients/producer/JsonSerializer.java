@@ -1,23 +1,20 @@
 package com.villcore.easykafka.clients.producer;
 
-import com.villcore.easykafka.clients.Serializer;
-import org.apache.kafka.common.utils.Utils;
+import com.google.gson.Gson;
 
-public class JsonSerializer<T> implements Serializer<T> {
+public class JsonSerializer implements Serializer {
+
+    private static final String CHARSET = "utf-8";
+
+    private static final Gson GSON = new Gson();
 
     @Override
     public <T> byte[] serialize(T obj) throws Exception {
-        return new byte[0];
+        return GSON.toJson(obj).getBytes(CHARSET);
     }
 
     @Override
     public <T> T deserialize(byte[] src, Class<T> clazz) throws Exception {
-        return null;
-    }
-
-    public static void main(String[] args) throws Exception {
-        Serializer<String> serializer = Utils.newInstance(JsonSerializer.class.getName(), Serializer.class);
-
-        System.out.println(serializer.serialize("a"));
+        return GSON.fromJson(new String(src, CHARSET), clazz);
     }
 }
