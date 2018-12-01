@@ -1,4 +1,4 @@
-package com.villcore.easykafka.clients.serializer;
+package com.villcore.easykafka.clients.producer;
 
 import com.villcore.easykafka.clients.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -16,7 +16,7 @@ public class JsonSerializer<T> implements Serializer<T> {
     }
 
     public static void main(String[] args) throws Exception {
-        com.villcore.easykafka.clients.serializer.Serializer<String> serializer = Utils.newInstance(JsonSerializer.class.getName(), com.villcore.easykafka.clients.serializer.Serializer.class);
+        Serializer<String> serializer = Utils.newInstance(JsonSerializer.class.getName(), Serializer.class);
 
         System.out.println(serializer.serialize("a"));
     }

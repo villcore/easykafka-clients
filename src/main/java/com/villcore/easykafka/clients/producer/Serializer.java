@@ -1,4 +1,4 @@
-package com.villcore.easykafka.clients.serializer;
+package com.villcore.easykafka.clients.producer;
 
 import java.nio.charset.Charset;
 
