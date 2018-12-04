@@ -54,7 +54,11 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     @Override
     public SendResult sendSync(String topic, Integer partition, K key, V value) {
-        return doSend(topic, null, key, value, Collections.emptyMap(), null).get();
+        try {
+            return doSend(topic, null, key, value, Collections.emptyMap(), null).get();
+        } catch (Exception e) {
+            throw new RuntimeException("sync send error.", e);
+        }
     }
 
     @Override
@@ -126,7 +130,7 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
         throw new IllegalStateException("EasyKafkaProducerImpl has been closed.");
     }
 
-    private final Map<String, Object> immutableMap(Map<String, Object> map) {
+    private Map<String, Object> immutableMap(Map<String, Object> map) {
         if (map == null || map.isEmpty()) {
             return Collections.emptyMap();
         } else {
