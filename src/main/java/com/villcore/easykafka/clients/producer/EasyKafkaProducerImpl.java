@@ -1,7 +1,7 @@
 package com.villcore.easykafka.clients.producer;
 
+import com.villcore.easykafka.clients.serializer.JsonSerializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Utils;
@@ -14,17 +14,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @ThreadSafe
 public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(EasyKafkaProducerImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(EasyKafkaProducerImpl.class);
 
-    private Serializer serializer;
+    private
 
     private final KafkaProducer<byte[], byte[]> producer;
 
-    private volatile boolean closed;
+    private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
     public EasyKafkaProducerImpl(Properties prop) {
         String serializerClazzName = prop.getProperty("serializer.class", JsonSerializer.class.getName());
@@ -107,26 +108,28 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
     }
 
     private final Future<SendResult> doSend(String topic, Integer partition, K key, V value, Map<String, Object> header, SendCallback sendCallback) {
-        if (!closed) {
-            try {
-                byte[] keyBytes = serializer.serialize(key);
-                byte[] valueBytes = serializer.serialize(value);
-                // TODO extract method.
-                RecordHeaders recordHeaders = new RecordHeaders();
-                if (!header.isEmpty()) {
-                    for (Map.Entry<String, Object> entry : header.entrySet()) {
-                        String headerKey = entry.getKey();
-                        Object headerValue = entry.getValue();
-                        byte[] headerValueBytes = serializer.serialize(headerValue);
-                        recordHeaders.add(headerKey, headerValueBytes);
-                    }
-                }
-                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, partition, serializer.serialize(key), serializer.serialize(value), recordHeaders);
 
-            } catch (Exception e) {
-                throw new IllegalStateException("EasyKafkaProducerImpl send record error.", e);
+        try {
+            byte[] keyBytes = serializer.serialize(key);
+            byte[] valueBytes = serializer.serialize(value);
+            // TODO extract method.
+            RecordHeaders recordHeaders = new RecordHeaders();
+            if (!header.isEmpty()) {
+                for (Map.Entry<String, Object> entry : header.entrySet()) {
+                    String headerKey = entry.getKey();
+                    Object headerValue = entry.getValue();
+                    byte[] headerValueBytes = serializer.serialize(headerValue);
+                    recordHeaders.add(headerKey, headerValueBytes);
+                }
             }
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, partition, serializer.serialize(key), serializer.serialize(value), recordHeaders);
+            if (!isClosed.get()) {
+                producer.send(record);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("EasyKafkaProducerImpl send record error.", e);
         }
+
         throw new IllegalStateException("EasyKafkaProducerImpl has been closed.");
     }
 
@@ -140,14 +143,14 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     @Override
     public void flush() {
-        if (!closed) {
+        if (!isClosed.get()) {
             producer.flush();
         }
     }
 
     @Override
     public void close() {
-        if (!closed) {
+        if (isClosed.compareAndSet(false, true)) {
             flush();
             producer.close();
         }
