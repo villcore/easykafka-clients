@@ -4,6 +4,7 @@ import com.villcore.easykafka.clients.serializer.JsonSerializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,6 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(EasyKafkaProducerImpl.class);
 
-    private
 
     private final KafkaProducer<byte[], byte[]> producer;
 
@@ -29,7 +29,7 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     public EasyKafkaProducerImpl(Properties prop) {
         String serializerClazzName = prop.getProperty("serializer.class", JsonSerializer.class.getName());
-        this.serializer = initSerializer(serializerClazzName);
+        // his.serializer = initSerializer(serializerClazzName);
         this.producer = new KafkaProducer<>(prop);
 
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
@@ -108,7 +108,7 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
     }
 
     private final Future<SendResult> doSend(String topic, Integer partition, K key, V value, Map<String, Object> header, SendCallback sendCallback) {
-
+    /*
         try {
             byte[] keyBytes = serializer.serialize(key);
             byte[] valueBytes = serializer.serialize(value);
@@ -131,6 +131,8 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
         }
 
         throw new IllegalStateException("EasyKafkaProducerImpl has been closed.");
+        */
+    return null;
     }
 
     private Map<String, Object> immutableMap(Map<String, Object> map) {
