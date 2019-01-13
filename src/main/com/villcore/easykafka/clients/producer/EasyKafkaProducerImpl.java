@@ -1,9 +1,6 @@
 package com.villcore.easykafka.clients.producer;
 
-import com.sun.tools.doclets.internal.toolkit.builders.AbstractMemberBuilder;
-import com.villcore.easykafka.clients.serializer.JsonSerializer;
-import com.villcore.easykafka.clients.serializer.Serializer;
-import org.apache.kafka.clients.ApiVersions;
+import com.villcore.easykafka.clients.serialization.Serializer;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -12,7 +9,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,26 +19,27 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 @ThreadSafe
 public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(EasyKafkaProducerImpl.class);
 
-    private final KafkaProducer<byte[], byte[]> producer;
-
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
+    private final boolean enableShutdownHook;
 
-    private final Serializer<K> keySerialize = null;
-    private final Serializer<V> valueSerializer = null;
-
-    private final boolean enableShutdownHook = true;
+    private final KafkaProducer<byte[], byte[]> producer;
+    private final Serializer<K> keySerialize;
+    private final Serializer<V> valueSerializer;
 
     public EasyKafkaProducerImpl(Properties prop) {
         // TODO config producer.
 
+        this.keySerialize = null;
+        this.valueSerializer = null;
         this.producer = new KafkaProducer<>(prop);
+
+        this.enableShutdownHook = false;
         if (enableShutdownHook) {
             Runtime.getRuntime().addShutdownHook(new Thread(this::close));
         }
@@ -68,7 +65,6 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     private final Future<SendResult> doSend(String topic, Integer partition, K key, V value, Map<String, byte[]> header, SendCallback sendCallback) {
         try {
-            // TODO serialize key and value to bytes;
             byte[] keyBytes = keySerialize.serialize(key);
             byte[] valueBytes = valueSerializer.serialize(value);
             RecordHeaders recordHeaders = new RecordHeaders();
@@ -82,8 +78,8 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topic, partition, keyBytes, valueBytes, recordHeaders);
             // TODO may be reject.
             ProducerRejectPolicy policy = null;
-            int recordSizeInBytes = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, keyBytes, valueBytes, recordHeaders.toArray());
-
+            int recordSizeInBytes = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.MAGIC_VALUE_V2,
+                    CompressionType.NONE, keyBytes, valueBytes, recordHeaders.toArray());
             if (!isClosed.get()) {
                 Future<RecordMetadata> sendFuture = producer.send(record, sendCallback != null ? new ProducerCallback(sendCallback) : null);
                 return new SendResultFuture(sendFuture);
