@@ -3,7 +3,10 @@ package com.villcore.easykafka.clients;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
-public class BackOff {
+public abstract class BackOff {
+
+    public abstract void execute();
+
     public static void main(String[] args) throws Exception {
         System.out.println("test");
 
@@ -24,10 +27,10 @@ public class BackOff {
                     intervalMs = (long) (intervalMs * multiplier);
                 }
                 // execute.
-                TimeUnit.MILLISECONDS.sleep(10);
-                System.out.println(new Date());
+
                 lastExecuteMs = System.currentTimeMillis();
             }
         }
     }
+
 }
