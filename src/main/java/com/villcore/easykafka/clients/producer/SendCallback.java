@@ -6,5 +6,4 @@ public interface SendCallback {
     void onException(Exception exception);
 
     void onAcknowledged(SendResult result);
-
 }

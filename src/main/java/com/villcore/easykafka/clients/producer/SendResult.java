@@ -1,5 +1,7 @@
 package com.villcore.easykafka.clients.producer;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -88,5 +90,10 @@ public class SendResult implements Serializable {
                 ", serializedValueSize=" + serializedValueSize +
                 ", checksum=" + checksum +
                 '}';
+    }
+
+    public static SendResult fromMetadata(RecordMetadata metadata) {
+        return new SendResult(metadata.topic(), metadata.partition(), metadata.offset(),
+                metadata.timestamp(), metadata.serializedKeySize(), metadata.serializedValueSize(), metadata.checksum();
     }
 }
