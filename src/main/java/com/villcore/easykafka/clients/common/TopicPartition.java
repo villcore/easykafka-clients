@@ -1,8 +1,9 @@
 package com.villcore.easykafka.clients.common;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public class TopicPartition {
+public class TopicPartition implements Serializable {
 
     private final String topic;
     private final Integer partition;

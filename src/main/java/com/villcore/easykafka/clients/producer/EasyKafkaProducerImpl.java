@@ -1,21 +1,19 @@
 package com.villcore.easykafka.clients.producer;
 
+import com.villcore.easykafka.clients.interceptor.ProducerInterceptor;
 import com.villcore.easykafka.clients.serialization.Serializer;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -33,21 +31,28 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
     private Serializer<K> keySerializer;
     private Serializer<V> valueSerializer;
 
-    public EasyKafkaProducerImpl(ProducerConfig producerConfig) {
-        // TODO kafka config.
-        // TODO replace serializer class.
-        this.kafkaProducer = new KafkaProducer<>(producerConfig.toConfigMap());
+    private ProducerInterceptor<K, V> interceptor;
+
+    public EasyKafkaProducerImpl(ProducerConfig<K, V> producerConfig) {
+        this.keySerializer = producerConfig.getKeySerializer();
+        this.valueSerializer = producerConfig.getValueSerializer();
+        this.interceptor = producerConfig.getInterceptor();
+        ensureSerializerConfiged();
+
+        Map<String, Object> configs = new HashMap<>(producerConfig.getConfigs());
+        configs.put("bootstrap.server", producerConfig.getBoostrapServer());
+        configs.put("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        configs.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
+        this.kafkaProducer = new KafkaProducer<>(configs);
     }
 
-    @Override
-    public void configSerializer(Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
+    private void ensureSerializerConfiged() {
+        Objects.requireNonNull(keySerializer, "Need config serilalizer");
+        Objects.requireNonNull(keySerializer, "Need config serilalizer");
     }
 
     @Override
     public SendResult sendSync(String topic, Integer partition, K key, V value, Map<String, byte[]> header) {
-        ensureSerializerConfiged();
         try {
             return sendAsync(topic, partition, key, value, header, null).get();
         } catch (Exception e) {
@@ -57,15 +62,10 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
 
     @Override
     public Future<SendResult> sendAsync(String topic, Integer partition, K key, V value, Map<String, byte[]> header, SendCallback sendCallback) {
-        ensureSerializerConfiged();
-        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(topic, partition, serializerKey(key), serializerValue(value), buildHeader(header));
-        doSend(sendCallback, producerRecord);
-        return null;
-    }
-
-    private void ensureSerializerConfiged() {
-        Objects.requireNonNull(keySerializer, "Need config serilalizer before send");
-        Objects.requireNonNull(keySerializer, "Need config serilalizer before send");
+        interceptor.onSend(topic, partition, key, value, header);
+        ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(topic, partition,
+                serializerKey(key), serializerValue(value), buildHeader(header));
+        return doSend(producerRecord, sendCallback);
     }
 
     public byte[] serializerKey(K key) {
@@ -86,14 +86,16 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
         return recordHeaders;
     }
 
-    private Future<SendResult> doSend(SendCallback sendCallback, ProducerRecord<byte[], byte[]> producerRecord) {
+    private Future<SendResult> doSend(ProducerRecord<byte[], byte[]> producerRecord, SendCallback sendCallback) {
         Future<RecordMetadata> sendFuture = kafkaProducer.send(producerRecord, new Callback() {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
+                SendResult sendResult = SendResult.fromMetadata(metadata);
+                interceptor.onAcknowledge(sendResult, exception);
                 if (exception != null) {
                     sendCallback.onException(exception);
                 } else {
-                    sendCallback.onAcknowledged(SendResult.fromMetadata(metadata));
+                    sendCallback.onAcknowledged(sendResult);
                 }
             }
         });
@@ -101,7 +103,7 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
     }
 
     private Future<SendResult> createSendResultFuture(Future<RecordMetadata> sendFuture) {
-        return null;
+        return new SendResultFuture(sendFuture);
     }
 
     @Override
@@ -119,38 +121,42 @@ public class EasyKafkaProducerImpl<K, V> implements EasyKafkaProducer<K, V> {
         }
     }
 
+    /**
+     * SendResultFuture
+     */
     private static class SendResultFuture implements Future<SendResult> {
 
         private Future<RecordMetadata> sendFuture;
 
         SendResultFuture (Future<RecordMetadata> sendFuture) {
             this.sendFuture = sendFuture;
-
         }
 
         @Override
         public boolean cancel(boolean mayInterruptIfRunning) {
-            return false;
+            return sendFuture.cancel(mayInterruptIfRunning);
         }
 
         @Override
         public boolean isCancelled() {
-            return false;
+            return sendFuture.isCancelled();
         }
 
         @Override
         public boolean isDone() {
-            return false;
+            return sendFuture.isDone();
         }
 
         @Override
         public SendResult get() throws InterruptedException, ExecutionException {
-            return null;
+            RecordMetadata recordMetadata = sendFuture.get();
+            return SendResult.fromMetadata(recordMetadata);
         }
 
         @Override
         public SendResult get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-            return null;
+            RecordMetadata recordMetadata = sendFuture.get(timeout, unit);
+            return SendResult.fromMetadata(recordMetadata);
         }
     }
 }

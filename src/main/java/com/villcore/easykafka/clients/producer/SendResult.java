@@ -93,7 +93,10 @@ public class SendResult implements Serializable {
     }
 
     public static SendResult fromMetadata(RecordMetadata metadata) {
+        if (metadata == null) {
+            return null;
+        }
         return new SendResult(metadata.topic(), metadata.partition(), metadata.offset(),
-                metadata.timestamp(), metadata.serializedKeySize(), metadata.serializedValueSize(), metadata.checksum();
+                metadata.timestamp(), metadata.serializedKeySize(), metadata.serializedValueSize(), metadata.checksum());
     }
 }
